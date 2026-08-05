@@ -36,10 +36,10 @@ cmake --build build
 ## Command-line
 
 ```
-build\clxcpp-cli.exe info   capture.clx                 # show metadata
-build\clxcpp-cli.exe extract capture.clx --outdir out   # tiff+png+json
-build\clxcpp-cli.exe extract capture.clx --formats tiff,json
-build\clxcpp-cli.exe preview capture.clx --image 1 --out preview.png
+build\clx.exe info   capture.clx                 # show metadata
+build\clx.exe extract capture.clx --outdir out   # tiff+png+json
+build\clx.exe extract capture.clx --formats tiff,json
+build\clx.exe preview capture.clx --image 1 --out preview.png
 ```
 
 `extract` writes, per image, the instrument-style names

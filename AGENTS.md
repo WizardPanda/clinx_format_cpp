@@ -10,7 +10,7 @@ bright-field/fluorescence images), ported from the Python `clxparser` project.
   `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release`
   `cmake --build build`
 - Run tests: `ctest --test-dir build --output-on-failure`
-- Run the CLI: `build\clxcpp.exe info <file.clx>` (or `extract`, `preview`)
+- Run the CLI: `build\clx.exe info <file.clx>` (or `extract`, `preview`)
 - Cross-check parity against the reference Python implementation:
   `python -m clxparser info <file.clx>` (run from the sibling `clinx_format` tree)
 

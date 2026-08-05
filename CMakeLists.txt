@@ -38,8 +38,8 @@ target_include_directories(clxcpp PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 
-add_executable(clxcpp-cli src/main.cpp)
-target_link_libraries(clxcpp-cli PRIVATE clxcpp)
+add_executable(clx src/main.cpp)
+target_link_libraries(clx PRIVATE clxcpp)
 
 enable_testing()
 
