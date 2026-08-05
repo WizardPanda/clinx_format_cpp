@@ -139,13 +139,23 @@ int main(int argc, char** argv) {
 
   int i = 2;
   try {
+    if (o.command == "help" || o.command == "-h" || o.command == "--help") {
+      print_usage(argv[0]);
+      return 0;
+    }
+
     if (o.command == "info") {
       for (; i < argc; ++i) {
-        if (argv[i][0] == '-' && std::string(argv[i]) != "-") {
-          std::cerr << "error: unexpected option: " << argv[i] << "\n";
+        std::string a = argv[i];
+        if (a == "-h" || a == "--help") {
+          print_usage(argv[0]);
+          return 0;
+        }
+        if (!a.empty() && a[0] == '-' && a != "-") {
+          std::cerr << "error: unexpected option: " << a << "\n";
           return 2;
         }
-        o.files.push_back(argv[i]);
+        o.files.push_back(a);
       }
       if (o.files.empty()) {
         std::cerr << "error: info requires at least one file\n";
