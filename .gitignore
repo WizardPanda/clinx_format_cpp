@@ -1,0 +1,13 @@
+build/
+build-*/
+out/
+*.user
+*.obj
+*.pdb
+*.ilk
+.vs/
+.idea/
+*.tif
+!tests/data/*.tif
+*.clx
+!tests/data/*.clx
