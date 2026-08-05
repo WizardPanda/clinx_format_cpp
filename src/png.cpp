@@ -95,27 +95,29 @@ std::vector<uint8_t> encode_png(
     throw std::invalid_argument("pixel buffer size does not match dimensions");
   }
 
-  // Convert little-endian samples to big-endian for PNG storage.
-  std::vector<uint8_t> samples;
-  if (bits == 16) {
-    samples.resize(pixel_bytes_le.size());
-    for (std::size_t i = 0; i + 1 < pixel_bytes_le.size(); i += 2) {
-      samples[i] = pixel_bytes_le[i + 1];
-      samples[i + 1] = pixel_bytes_le[i];
-    }
-  } else {
-    samples = pixel_bytes_le;
-  }
-
   std::size_t row_len = static_cast<std::size_t>(width * bits / 8);
   std::vector<uint8_t> raw(expected + height);
   std::size_t out_pos = 0;
-  std::size_t src_pos = 0;
-  for (int64_t r = 0; r < height; ++r) {
-    raw[out_pos++] = 0;  // filter: None
-    std::memcpy(raw.data() + out_pos, samples.data() + src_pos, row_len);
-    out_pos += row_len;
-    src_pos += row_len;
+
+  if (bits == 16) {
+    // byte-swap 16-bit samples to big-endian directly into the filtered rows
+    std::size_t src = 0;
+    for (int64_t r = 0; r < height; ++r) {
+      raw[out_pos++] = 0;  // filter: None
+      std::size_t row_end = src + row_len;
+      for (; src < row_end; src += 2) {
+        raw[out_pos++] = pixel_bytes_le[src + 1];
+        raw[out_pos++] = pixel_bytes_le[src];
+      }
+    }
+  } else {
+    std::size_t src = 0;
+    for (int64_t r = 0; r < height; ++r) {
+      raw[out_pos++] = 0;  // filter: None
+      std::memcpy(raw.data() + out_pos, pixel_bytes_le.data() + src, row_len);
+      out_pos += row_len;
+      src += row_len;
+    }
   }
 
   std::vector<uint8_t> compressed = zlib_compress(raw, 6);
@@ -157,18 +159,42 @@ void clx_image::save_png(const std::string& path,
 
 namespace {
 
-// Percentile via linear interpolation on a sorted copy, replicating
-// numpy.percentile's default ('linear') method.
-double percentile_linear(std::vector<uint32_t> sorted, double q) {
-  std::sort(sorted.begin(), sorted.end());
-  std::size_t n = sorted.size();
+// Build a histogram of pixel values from the raw buffer (8- or 16-bit).
+std::vector<uint64_t> build_histogram(const std::vector<uint8_t>& px, int bits) {
+  std::size_t bins = bits == 8 ? 256u : 65536u;
+  std::vector<uint64_t> hist(bins, 0);
+  if (bits == 16) {
+    for (std::size_t i = 0; i + 1 < px.size(); i += 2) {
+      ++hist[static_cast<uint16_t>(px[i]) |
+             (static_cast<uint16_t>(px[i + 1]) << 8)];
+    }
+  } else {
+    for (uint8_t v : px) ++hist[v];
+  }
+  return hist;
+}
+
+// Value of the rank-th smallest element (0-based) via cumulative histogram.
+uint64_t value_at_rank(const std::vector<uint64_t>& hist, std::size_t rank) {
+  uint64_t cum = 0;
+  for (std::size_t v = 0; v < hist.size(); ++v) {
+    cum += hist[v];
+    if (cum > rank) return v;
+  }
+  return hist.size() - 1;
+}
+
+// Percentile via linear interpolation on the histogram, replicating
+// numpy.percentile's default ('linear') method exactly (sort-equivalent).
+double percentile_from_histogram(const std::vector<uint64_t>& hist,
+                                 std::size_t n, double q) {
   if (n == 0) return 0.0;
   double idx = static_cast<double>(n - 1) * q / 100.0;
   std::size_t lo = static_cast<std::size_t>(std::floor(idx));
   std::size_t hi = static_cast<std::size_t>(std::ceil(idx));
   double frac = idx - std::floor(idx);
-  double a = static_cast<double>(sorted[lo]);
-  double b = static_cast<double>(sorted[hi]);
+  double a = static_cast<double>(value_at_rank(hist, lo));
+  double b = static_cast<double>(value_at_rank(hist, hi));
   return a + (b - a) * frac;
 }
 
@@ -177,39 +203,38 @@ double percentile_linear(std::vector<uint32_t> sorted, double q) {
 std::vector<uint8_t> clx_image::preview_png_bytes(
     std::optional<int64_t> low, std::optional<int64_t> high,
     const std::map<std::string, std::string>& metadata) const {
-  std::size_t n = pixel_buf.size() / (bits_per_sample() / 8);
-
-  std::vector<uint32_t> values;
-  values.reserve(n);
-  if (bits_per_sample() == 16) {
-    for (std::size_t i = 0; i + 1 < pixel_buf.size(); i += 2) {
-      values.push_back(static_cast<uint32_t>(pixel_buf[i]) |
-                       (static_cast<uint32_t>(pixel_buf[i + 1]) << 8));
-    }
-  } else if (bits_per_sample() == 8) {
-    for (uint8_t v : pixel_buf) values.push_back(v);
-  } else {
+  if (bits_per_sample() != 16 && bits_per_sample() != 8) {
     throw std::invalid_argument("unsupported bits per sample");
   }
+  std::size_t n = pixel_buf.size() / (bits_per_sample() / 8);
 
   if (!low || !high) {
-    double lo = percentile_linear(values, 1.0);
-    double hi = percentile_linear(values, 99.0);
-    low = static_cast<int64_t>(lo);
-    high = static_cast<int64_t>(hi);
+    auto hist = build_histogram(pixel_buf, static_cast<int>(bits_per_sample()));
+    low = static_cast<int64_t>(percentile_from_histogram(hist, n, 1.0));
+    high = static_cast<int64_t>(percentile_from_histogram(hist, n, 99.0));
   }
   if (*high <= *low) high = *low + 1;
 
   // numpy: (arr.astype(float32) - low) * (255.0/(high-low)) clipped to [0,255]
   float scale = static_cast<float>(255.0 / static_cast<double>(*high - *low));
   std::vector<uint8_t> scaled;
-  scaled.reserve(values.size());
-  for (uint32_t v : values) {
-    float x = (static_cast<float>(static_cast<int64_t>(v)) -
-               static_cast<float>(*low)) *
-              scale;
-    x = std::max(0.0f, std::min(255.0f, x));
-    scaled.push_back(static_cast<uint8_t>(x));
+  scaled.reserve(n);
+  if (bits_per_sample() == 16) {
+    for (std::size_t i = 0; i + 1 < pixel_buf.size(); i += 2) {
+      int64_t v = static_cast<int64_t>(static_cast<uint16_t>(pixel_buf[i]) |
+                                       (static_cast<uint16_t>(pixel_buf[i + 1])
+                                        << 8));
+      float x = (static_cast<float>(v) - static_cast<float>(*low)) * scale;
+      x = std::max(0.0f, std::min(255.0f, x));
+      scaled.push_back(static_cast<uint8_t>(x));
+    }
+  } else {
+    for (uint8_t v : pixel_buf) {
+      float x =
+          (static_cast<float>(static_cast<int64_t>(v)) - static_cast<float>(*low)) * scale;
+      x = std::max(0.0f, std::min(255.0f, x));
+      scaled.push_back(static_cast<uint8_t>(x));
+    }
   }
 
   return encode_png(width(), height(), 8, scaled, metadata);
