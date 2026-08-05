@@ -1,0 +1,11 @@
+File            : tests/data/Samp1_20260804_161544_00.06.946.clx
+Sample          : Samp1_20260804_161544
+Captured        : 2026-08-04 16:15:57.224000
+Exposure        : 6946 ms
+Software        : Clx695 (format v3)
+Build date      : 2023-12-28 11:13:00
+Images          : 2
+Filename meta   : sample='Samp1' date=20260804 time=161544 exposure=6946 ms
+  - [0] 687x550 16-bit type=4 min=0 max=65535 brightfield
+  - [1] 687x550 16-bit type=4 min=1200 max=65535 fluorescence
+Trailer         : 6456 bytes

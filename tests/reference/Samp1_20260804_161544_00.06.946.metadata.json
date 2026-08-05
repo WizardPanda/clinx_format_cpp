@@ -1,0 +1,57 @@
+{
+  "file": "tests/data/Samp1_20260804_161544_00.06.946.clx",
+  "magic": 9707,
+  "format_version": 3,
+  "software": "Clx695",
+  "build_datetime": "2023-12-28 11:13:00",
+  "sample_name": "Samp1_20260804_161544",
+  "capture_time": "2026-08-04 16:15:57.224000",
+  "exposure_ms": 6946,
+  "filename_info": {
+    "sample": "Samp1",
+    "date": "20260804",
+    "time": "161544",
+    "exposure_ms": 6946,
+    "capture_time": "2026-08-04 16:15:44"
+  },
+  "image_count": 2,
+  "image_type": 4,
+  "images": [
+    {
+      "offset": 814,
+      "type": 4,
+      "width": 687,
+      "height": 550,
+      "bits_per_sample": 16,
+      "min_value": 0,
+      "max_value": 65535,
+      "byte_count": 755700,
+      "index": 0
+    },
+    {
+      "offset": 757070,
+      "type": 4,
+      "width": 687,
+      "height": 550,
+      "bits_per_sample": 16,
+      "min_value": 1200,
+      "max_value": 65535,
+      "byte_count": 755700,
+      "index": 1
+    }
+  ],
+  "trailer_size": 6456,
+  "trailer_info": {
+    "field_0": 10,
+    "full_scale": 65535,
+    "type_0": 4,
+    "type_1": 4,
+    "exposure_ms": 6946,
+    "max_value": 65535,
+    "type_2": 4,
+    "type_3": 4,
+    "exposure_ms_matches_header": true,
+    "Gray.pal": "Gray.pal",
+    "202312281113": "202312281113"
+  }
+}

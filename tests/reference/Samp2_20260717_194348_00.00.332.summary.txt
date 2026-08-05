@@ -1,0 +1,11 @@
+File            : tests/data/Samp2_20260717_194348_00.00.332.clx
+Sample          : Samp2_20260717_194348
+Captured        : 2026-07-17 19:44:02.140000
+Exposure        : 332 ms
+Software        : Clx695 (format v3)
+Build date      : 2023-12-28 11:13:00
+Images          : 2
+Filename meta   : sample='Samp2' date=20260717 time=194348 exposure=332 ms
+  - [0] 1375x1100 16-bit type=2 min=0 max=65535 brightfield
+  - [1] 1375x1100 16-bit type=2 min=0 max=26182 fluorescence
+Trailer         : 6456 bytes
