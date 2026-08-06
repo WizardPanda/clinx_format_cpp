@@ -147,7 +147,8 @@ class clx_file {
     return images[0].type();
   }
 
-  // Best-effort channel identification for 2-image captures.
+  // Channel labels for 2-image captures: {0: "brightfield", 1: "fluorescence"},
+  // matching the instrument's stable image order (same as its own exports).
   std::map<int, std::string> channel_labels() const;
 
   // Human-readable summary, matching clxparser's ClxFile.summary().

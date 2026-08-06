@@ -121,8 +121,8 @@ TEST(core_trailer_size) {
 }
 
 TEST(core_samp3_metadata) {
-  // Samp3 is a long-exposure (90 s) capture whose fluorescence channel
-  // saturates heavily; regression test for the channel-identification heuristic.
+  // Samp3 is a long-exposure (90 s) capture; regression test ensuring the
+  // stable channel order (0=brightfield, 1=fluorescence) still applies.
   clx_file f = load(data_dir() + "/Samp3_20250721_183436_01.30.000.clx");
   CHECK_EQ(f.magic, kMagic);
   CHECK_EQ(f.sample_name, std::string("K82_20250721_183436"));

@@ -183,19 +183,18 @@ TIFFs (verified for all four exported images in the test suite).
 
 ### 5.1 Channels
 
-Every observed capture contains two images in a stable order:
+Every observed capture contains two images in a **stable order**:
 
 | Index | Channel | Characteristics |
 |---|---|---|
-| `0` | Bright field | Higher median (evenly illuminated) |
+| `0` | Bright field | Evenly illuminated |
 | `1` | Fluorescence / chemiluminescence | Darker background with signal |
 
-`clxparser` does not hard-code this; `ClxFile.channel_labels()` assigns the
-labels by comparing sampled **medians** when exactly two images are present.
-A median comparison is used rather than the mean because in long-exposure
-captures the fluorescence channel can saturate heavily, which inflates its
-mean above the bright-field's while leaving its median lower. The descriptor
-`type` field is a per-capture mode constant and does not identify the channel.
+The order matches the instrument software's own export and is identical across
+every observed capture, so `ClxFile.channel_labels()` returns
+`{0: "brightfield", 1: "fluorescence"}` for two-image captures without any
+intensity heuristic. The descriptor `type` field is a per-capture mode constant
+(2/3/4 observed) and does not identify the channel.
 
 ---
 

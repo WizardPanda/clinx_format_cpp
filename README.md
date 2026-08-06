@@ -110,9 +110,9 @@ tests/                   CTest suite incl. pixel-identity vs real exports
   **not guaranteed** to parse every `.clx` file produced by all Clinx products.
   Validate against your own files first.
 - Only raw, uncompressed 16-bit (and 8/32-bit) images are supported.
-- Channel identification (`brightfield` vs `fluorescence`) is a heuristic based
-  on sampled medians and should not be trusted for downstream decisions if your
-  acquisition settings vary.
+- Channel order is stable: image `0` is the bright field, image `1` the
+  fluorescence/chemiluminescence channel (matching the instrument's own
+  exports). `channel_labels()` returns this mapping for two-image captures.
 - `to_json()` embeds the input path verbatim (like the Python implementation).
 
 ## License
