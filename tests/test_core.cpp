@@ -143,6 +143,28 @@ TEST(core_samp3_metadata) {
   CHECK_EQ(labels[1], std::string("fluorescence"));
 }
 
+TEST(core_samp4_metadata) {
+  // Samp4 uses descriptor marker 0xC03D (others use 0xC03E); the high byte
+  // 0xC0 is the stable discriminator. Regression test for marker tolerance.
+  clx_file f = load(data_dir() + "/Samp4_20260723_163251_00.00.946.clx");
+  CHECK_EQ(f.magic, kMagic);
+  CHECK_EQ(f.sample_name, std::string("GAPDH_20260723_163251"));
+  CHECK_EQ(f.exposure_ms, (int64_t)946);
+  CHECK_EQ(f.software, std::string("Clx695"));
+  CHECK_EQ(f.format_version, (int64_t)3);
+  CHECK_EQ(f.image_count(), (std::size_t)2);
+  CHECK_EQ(f.images[0].width(), (int64_t)687);
+  CHECK_EQ(f.images[0].height(), (int64_t)550);
+  CHECK_EQ(f.images[0].type(), (int64_t)4);
+  CHECK_EQ(f.images[0].min_value(), (int64_t)160);
+  CHECK_EQ(f.images[0].max_value(), (int64_t)65535);
+  CHECK_EQ(f.images[1].min_value(), (int64_t)1218);
+  CHECK_EQ(f.images[1].max_value(), (int64_t)32782);
+  auto labels = f.channel_labels();
+  CHECK_EQ(labels[0], std::string("brightfield"));
+  CHECK_EQ(labels[1], std::string("fluorescence"));
+}
+
 TEST(helpers_ole_to_datetime) {
   datetime d = ole_to_datetime(46238.0);
   CHECK_EQ(d.year, 2026);

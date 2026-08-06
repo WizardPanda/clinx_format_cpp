@@ -1,0 +1,11 @@
+File            : tests/data/Samp4_20260723_163251_00.00.946.clx
+Sample          : GAPDH_20260723_163251
+Captured        : 2026-07-23 16:33:02.587000
+Exposure        : 946 ms
+Software        : Clx695 (format v3)
+Build date      : 2023-12-28 11:13:00
+Images          : 2
+Filename meta   : sample='Samp4' date=20260723 time=163251 exposure=946 ms
+  - [0] 687x550 16-bit type=4 min=160 max=65535 brightfield
+  - [1] 687x550 16-bit type=4 min=1218 max=32782 fluorescence
+Trailer         : 6456 bytes

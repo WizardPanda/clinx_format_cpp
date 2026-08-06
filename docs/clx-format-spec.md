@@ -122,7 +122,7 @@ raw pixel data.
 
 | Offset | Size | Type | Field | Meaning |
 |---|---|---|---|---|
-| `0x00` | 2 | `u16` | `marker` | `0xC03E` — identifies a descriptor |
+| `0x00` | 2 | `u16` | `marker` | High byte `0xC0` identifies a descriptor; low byte varies by capture (`0x3E`/`0x3D` observed) |
 | `0x02` | 4 | `u32` | `type` | Image type constant, `2` or `4` |
 | `0x06` | 4 | `u32` | `width` | Image width in pixels |
 | `0x0A` | 4 | `u32` | `height` | Image height in pixels |
@@ -155,8 +155,9 @@ variant, or camera configuration.
 
 Because the descriptor position is tied to a fixed header layout that may differ
 between software versions, `clxparser` does **not** rely on hard-coded offsets.
-Instead it scans the file for the `0xC03E` marker and keeps only candidates
-that satisfy all of:
+Instead it scans the file for the descriptor marker — any `u16` whose high byte
+is `0xC0` (the low byte varies by capture, e.g. `0xC03E` and `0xC03D`) — and
+keeps only candidates that satisfy all of:
 
 1. `1 ≤ width ≤ 8192` and `1 ≤ height ≤ 8192`;
 2. `bits_per_sample ∈ {8, 16, 32}`;

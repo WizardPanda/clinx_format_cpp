@@ -29,6 +29,14 @@ TEST(parity_summary_samp2) {
   CHECK_EQ(f.summary() + "\n", expect);
 }
 
+TEST(parity_summary_samp4) {
+  std::string key = "Samp4_20260723_163251_00.00.946";
+  auto bytes = read_file_bytes(data_dir() + "/" + key + ".clx");
+  clx_file f = parse(bytes, rel_path(key));
+  std::string expect = read_file_text(ref_dir() + "/" + key + ".summary.txt");
+  CHECK_EQ(f.summary() + "\n", expect);
+}
+
 TEST(parity_metadata_json_samp1) {
   std::string key = "Samp1_20260804_161544_00.06.946";
   auto bytes = read_file_bytes(data_dir() + "/" + key + ".clx");
@@ -45,12 +53,21 @@ TEST(parity_metadata_json_samp2) {
   CHECK_EQ(f.to_json(), expect);
 }
 
+TEST(parity_metadata_json_samp4) {
+  std::string key = "Samp4_20260723_163251_00.00.946";
+  auto bytes = read_file_bytes(data_dir() + "/" + key + ".clx");
+  clx_file f = parse(bytes, rel_path(key));
+  std::string expect = read_file_text(ref_dir() + "/" + key + ".metadata.json");
+  CHECK_EQ(f.to_json(), expect);
+}
+
 TEST(parity_16bit_png_pixels) {
   // Compare decompressed pixels of our 16-bit PNG against the Python-generated
   // reference PNG (deflate streams differ between zlib and miniz, so compare
   // decoded pixel data, not raw bytes).
   for (auto key : {"Samp1_20260804_161544_00.06.946",
-                   "Samp2_20260717_194348_00.00.332"}) {
+                   "Samp2_20260717_194348_00.00.332",
+                   "Samp4_20260723_163251_00.00.946"}) {
     clx_file f = load(data_dir() + "/" + key + ".clx");
     for (std::size_t i = 0; i < f.images.size(); ++i) {
       auto mine = f.images[i].to_png_bytes();
@@ -68,7 +85,8 @@ TEST(parity_16bit_png_pixels) {
 
 TEST(parity_preview_png_pixels) {
   for (auto key : {"Samp1_20260804_161544_00.06.946",
-                   "Samp2_20260717_194348_00.00.332"}) {
+                   "Samp2_20260717_194348_00.00.332",
+                   "Samp4_20260723_163251_00.00.946"}) {
     clx_file f = load(data_dir() + "/" + key + ".clx");
     for (std::size_t i = 0; i < f.images.size(); ++i) {
       auto mine = f.images[i].preview_png_bytes();

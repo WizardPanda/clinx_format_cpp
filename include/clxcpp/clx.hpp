@@ -15,7 +15,9 @@ namespace clxcpp {
 constexpr uint32_t kMagic = 0x000025EB;
 constexpr std::size_t kHeaderSize = 0x0124;
 constexpr std::size_t kDescriptorSize = 34;
-constexpr uint16_t kDescriptorMarker = 0xC03E;
+// Descriptor marker: the high byte 0xC0 is stable; the low byte varies by
+// capture (0x3E and 0x3D observed), so only the high byte is validated.
+constexpr uint16_t kDescriptorMarker = 0xC000;
 constexpr int64_t kMaxDimension = 8192;
 constexpr const char* kBuildDateString = "202312281113";
 

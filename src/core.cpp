@@ -230,7 +230,9 @@ std::optional<image_descriptor> parse_descriptor(const std::vector<uint8_t>& dat
                                                  std::size_t offset) {
   if (offset + kDescriptorSize > data.size()) return std::nullopt;
   uint16_t marker = read_u16(data, offset);
-  if (marker != kDescriptorMarker) return std::nullopt;
+  // High byte 0xC0 is the stable descriptor marker; the low byte varies by
+  // capture (0x3E and 0x3D observed), so only the high byte is checked.
+  if ((marker & 0xFF00) != 0xC000) return std::nullopt;
   uint32_t itype = read_u32(data, offset + 2);
   uint32_t width = read_u32(data, offset + 6);
   uint32_t height = read_u32(data, offset + 10);
@@ -265,10 +267,10 @@ std::vector<image_descriptor> find_descriptors(const std::vector<uint8_t>& data)
   std::vector<image_descriptor> found;
   std::size_t start = 0;
   while (true) {
-    // search for bytes 3E C0 (LE u16 0xC03E)
+    // Search for the high byte of the LE u16 marker (0xC0); the low byte varies.
     std::size_t idx = std::string::npos;
     for (std::size_t i = start; i + 1 < data.size(); ++i) {
-      if (data[i] == 0x3E && data[i + 1] == 0xC0) {
+      if (data[i + 1] == 0xC0) {
         idx = i;
         break;
       }
