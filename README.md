@@ -5,7 +5,7 @@ instrument `.clx` files** — the native capture format produced by the imager i
 the lab. A `.clx` file bundles acquisition metadata (sample name, capture time,
 exposure) together with the **raw 16-bit fluorescence and bright-field images**.
 
-This is a C++ port of the [Python `clxparser`](https://github.com/) project,
+This is a C++ port of the Python `clxparser` project,
 kept **pixel-identical** to it: exported TIFFs and 16-bit PNGs carry exactly the
 raw 16-bit pixels from the `.clx` capture, and the 8-bit preview path matches
 the Python implementation's numpy-based percentile scaling byte-for-byte.
