@@ -19,11 +19,6 @@ uint32_t crc32_bytes(const uint8_t* data, std::size_t len) {
   return static_cast<uint32_t>(mz_crc32(MZ_CRC32_INIT, data, len));
 }
 
-void put_be16(std::vector<uint8_t>& out, uint16_t v) {
-  out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
-  out.push_back(static_cast<uint8_t>(v & 0xFF));
-}
-
 void put_be32(std::vector<uint8_t>& out, uint32_t v) {
   out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
   out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));

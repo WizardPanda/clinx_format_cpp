@@ -1,7 +1,5 @@
 #include "clxcpp/clx.hpp"
 
-#include <cstdio>
-#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>

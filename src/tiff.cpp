@@ -1,6 +1,5 @@
 #include "clxcpp/clx.hpp"
 
-#include <cstring>
 #include <fstream>
 
 namespace clxcpp {

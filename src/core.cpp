@@ -285,7 +285,6 @@ trailer_info parse_trailer_info(const std::vector<uint8_t>& trailer,
                                 int64_t exposure_ms) {
   trailer_info info;
   if (trailer.size() >= 32) {
-    info.has_fields = true;
     info.field_0 = read_u32(trailer, 0);
     info.full_scale = read_u32(trailer, 4);
     info.type_0 = read_u32(trailer, 8);

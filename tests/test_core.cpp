@@ -1,7 +1,5 @@
 #include "test_util.h"
 
-#include <string>
-
 using namespace clxcpp;
 
 static std::string data_dir() {

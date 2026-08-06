@@ -14,8 +14,6 @@ namespace clxcpp {
 // Format constants (little-endian throughout). See docs/clx-format-spec.md.
 constexpr uint32_t kMagic = 0x000025EB;
 constexpr std::size_t kHeaderSize = 0x0124;
-constexpr std::size_t kVersionBlockSize = 0x0104;
-constexpr std::size_t kBuildDateSize = 0x0100;
 constexpr std::size_t kDescriptorSize = 34;
 constexpr uint16_t kDescriptorMarker = 0xC03E;
 constexpr int64_t kMaxDimension = 8192;
@@ -35,13 +33,6 @@ struct datetime {
   int minute = 0;
   int second = 0;
   int microsecond = 0;
-
-  bool operator==(const datetime& o) const {
-    return year == o.year && month == o.month && day == o.day &&
-           hour == o.hour && minute == o.minute && second == o.second &&
-           microsecond == o.microsecond;
-  }
-  bool operator!=(const datetime& o) const { return !(*this == o); }
 
   // Equivalent to Python's datetime.isoformat(sep=' ').
   std::string isoformat(char sep = ' ') const;
@@ -63,7 +54,6 @@ struct image_descriptor {
 
 // Best-effort decode of the trailing settings/statistics block.
 struct trailer_info {
-  bool has_fields = false;
   uint32_t field_0 = 0;
   uint32_t full_scale = 0;
   uint32_t type_0 = 0;

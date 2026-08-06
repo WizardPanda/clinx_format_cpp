@@ -91,11 +91,16 @@ std::vector<std::string> export_images(
   std::filesystem::path dir(outdir);
   std::vector<std::string> written;
 
+  bool has_tiff =
+      std::find(formats.begin(), formats.end(), "tiff") != formats.end();
+  bool has_png = std::find(formats.begin(), formats.end(), "png") != formats.end();
+  bool has_json =
+      std::find(formats.begin(), formats.end(), "json") != formats.end();
+  auto md = image_metadata(f);
+
   for (const auto& img : f.images) {
     std::string stem = base + "_" + std::to_string(img.index) + "_" +
                        std::to_string(img.bits_per_sample()) + "bit";
-    bool has_tiff = std::find(formats.begin(), formats.end(), "tiff") != formats.end();
-    bool has_png = std::find(formats.begin(), formats.end(), "png") != formats.end();
     if (has_tiff) {
       std::string path = (dir / (stem + ".tif")).string();
       img.save_tiff(path, dpi);
@@ -103,20 +108,18 @@ std::vector<std::string> export_images(
     }
     if (has_png) {
       std::string path = (dir / (stem + ".png")).string();
-      img.save_png(path, image_metadata(f));
+      img.save_png(path, md);
       written.push_back(path);
     }
     if (preview) {
       std::string path =
           (dir / (base + "_" + std::to_string(img.index) + "_preview.png"))
               .string();
-      write_file(path, img.preview_png_bytes(std::nullopt, std::nullopt,
-                                             image_metadata(f)));
+      write_file(path, img.preview_png_bytes(std::nullopt, std::nullopt, md));
       written.push_back(path);
     }
   }
 
-  bool has_json = std::find(formats.begin(), formats.end(), "json") != formats.end();
   if (has_json) {
     std::string path = (dir / (base + "_metadata.json")).string();
     write_text_file(path, f.to_json());
