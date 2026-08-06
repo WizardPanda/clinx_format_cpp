@@ -327,10 +327,6 @@ trailer_info parse_trailer_info(const std::vector<uint8_t>& trailer,
 std::map<int, std::string> clx_file::channel_labels() const {
   std::map<int, std::string> out;
   if (images.size() != 2) return out;
-  // The instrument writes images in a stable order: index 0 is the bright
-  // field, index 1 the fluorescence/chemiluminescence channel. This matches
-  // the official software's own export and holds across every observed sample,
-  // so no intensity heuristic is needed.
   out[0] = "brightfield";
   out[1] = "fluorescence";
   return out;
