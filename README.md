@@ -111,7 +111,7 @@ tests/                   CTest suite incl. pixel-identity vs real exports
   Validate against your own files first.
 - Only raw, uncompressed 16-bit (and 8/32-bit) images are supported.
 - Channel identification (`brightfield` vs `fluorescence`) is a heuristic based
-  on mean intensity and should not be trusted for downstream decisions if your
+  on sampled medians and should not be trusted for downstream decisions if your
   acquisition settings vary.
 - `to_json()` embeds the input path verbatim (like the Python implementation).
 

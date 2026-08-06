@@ -187,11 +187,15 @@ Every observed capture contains two images in a stable order:
 
 | Index | Channel | Characteristics |
 |---|---|---|
-| `0` | Bright field | Higher mean / variance (evenly illuminated) |
+| `0` | Bright field | Higher median (evenly illuminated) |
 | `1` | Fluorescence / chemiluminescence | Darker background with signal |
 
 `clxparser` does not hard-code this; `ClxFile.channel_labels()` assigns the
-labels by comparing mean intensities when exactly two images are present.
+labels by comparing sampled **medians** when exactly two images are present.
+A median comparison is used rather than the mean because in long-exposure
+captures the fluorescence channel can saturate heavily, which inflates its
+mean above the bright-field's while leaving its median lower. The descriptor
+`type` field is a per-capture mode constant and does not identify the channel.
 
 ---
 

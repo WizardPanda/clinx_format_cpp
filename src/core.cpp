@@ -324,34 +324,39 @@ trailer_info parse_trailer_info(const std::vector<uint8_t>& trailer,
   return info;
 }
 
-// Sampled mean of a uint16 image (stride-skipped), mirroring _sampled_mean.
-double sampled_mean(const clx_image& image) {
-  if (image.bits_per_sample() != 16) {
-    // fall back to a full mean for 8-bit images
-    if (image.bits_per_sample() == 8) {
-      if (image.pixel_buf.empty()) return 0.0;
-      uint64_t sum = 0;
-      for (uint8_t v : image.pixel_buf) sum += v;
-      return static_cast<double>(sum) / static_cast<double>(image.pixel_buf.size());
+// Sampled median of an image (stride-skipped), used for channel
+// identification. More robust than the mean: in long-exposure captures the
+// fluorescence channel can saturate heavily, inflating its mean above the
+// bright-field's while leaving its median lower.
+uint16_t sampled_median(const clx_image& image) {
+  std::size_t n = image.pixel_buf.size() / (image.bits_per_sample() / 8);
+  if (n == 0) return 0;
+  std::vector<uint16_t> samples;
+  if (image.bits_per_sample() == 16) {
+    std::size_t step = std::max<std::size_t>(1, n / 200000);
+    samples.reserve(n / step + 1);
+    for (std::size_t i = 0; i < n; i += step) {
+      samples.push_back(read_u16(image.pixel_buf, i * 2));
     }
+  } else if (image.bits_per_sample() == 8) {
+    std::size_t step = std::max<std::size_t>(1, n / 200000);
+    samples.reserve(n / step + 1);
+    for (std::size_t i = 0; i < n; i += step) {
+      samples.push_back(image.pixel_buf[i]);
+    }
+  } else {
+    return 0;
   }
-  std::size_t n = image.pixel_buf.size() / 2;
-  if (n == 0) return 0.0;
-  std::size_t step = std::max<std::size_t>(1, n / 200000);
-  uint64_t sum = 0;
-  std::size_t count = 0;
-  for (std::size_t i = 0; i < n; i += step) {
-    sum += read_u16(image.pixel_buf, i * 2);
-    ++count;
-  }
-  return static_cast<double>(sum) / static_cast<double>(count);
+  auto mid = samples.begin() + static_cast<std::ptrdiff_t>(samples.size() / 2);
+  std::nth_element(samples.begin(), mid, samples.end());
+  return *mid;
 }
 
 std::map<int, std::string> clx_file::channel_labels() const {
   std::map<int, std::string> out;
   if (images.size() != 2) return out;
-  double m0 = sampled_mean(images[0]);
-  double m1 = sampled_mean(images[1]);
+  uint16_t m0 = sampled_median(images[0]);
+  uint16_t m1 = sampled_median(images[1]);
   int bright = m0 >= m1 ? 0 : 1;
   out[bright] = "brightfield";
   out[1 - bright] = "fluorescence";

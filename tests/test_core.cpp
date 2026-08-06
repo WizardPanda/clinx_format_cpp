@@ -96,7 +96,8 @@ TEST(core_pixels_identical_to_exported_tiff_strips) {
 
 TEST(core_channel_labels) {
   for (auto key : {"Samp1_20260804_161544_00.06.946",
-                   "Samp2_20260717_194348_00.00.332"}) {
+                   "Samp2_20260717_194348_00.00.332",
+                   "Samp3_20250721_183436_01.30.000"}) {
     clx_file f = load(data_dir() + "/" + key + ".clx");
     auto labels = f.channel_labels();
     CHECK_EQ(labels.size(), (std::size_t)2);
@@ -107,7 +108,8 @@ TEST(core_channel_labels) {
 
 TEST(core_trailer_size) {
   for (auto key : {"Samp1_20260804_161544_00.06.946",
-                   "Samp2_20260717_194348_00.00.332"}) {
+                   "Samp2_20260717_194348_00.00.332",
+                   "Samp3_20250721_183436_01.30.000"}) {
     clx_file f = load(data_dir() + "/" + key + ".clx");
     CHECK_EQ(f.trailer.size(), (std::size_t)6456);
     CHECK(f.raw_trailer_info_.exposure_ms_matches_header);
@@ -116,6 +118,31 @@ TEST(core_trailer_size) {
     CHECK(f.raw_trailer_info_.has_build_date);
     CHECK_EQ(f.raw_trailer_info_.build_date_text, std::string(kBuildDateString));
   }
+}
+
+TEST(core_samp3_metadata) {
+  // Samp3 is a long-exposure (90 s) capture whose fluorescence channel
+  // saturates heavily; regression test for the channel-identification heuristic.
+  clx_file f = load(data_dir() + "/Samp3_20250721_183436_01.30.000.clx");
+  CHECK_EQ(f.magic, kMagic);
+  CHECK_EQ(f.sample_name, std::string("K82_20250721_183436"));
+  CHECK_EQ(f.exposure_ms, (int64_t)90000);
+  CHECK_EQ(f.software, std::string("Clx695"));
+  CHECK_EQ(f.format_version, (int64_t)3);
+  CHECK(f.capture_time.has_value());
+  CHECK_EQ(f.capture_time->year, 2025);
+  CHECK_EQ(f.capture_time->month, 7);
+  CHECK_EQ(f.capture_time->day, 21);
+  CHECK_EQ(f.image_count(), (std::size_t)2);
+  CHECK_EQ(f.images[0].width(), (int64_t)916);
+  CHECK_EQ(f.images[0].height(), (int64_t)733);
+  CHECK_EQ(f.images[0].type(), (int64_t)3);
+  CHECK_EQ(f.images[0].min_value(), (int64_t)500);
+  CHECK_EQ(f.images[1].min_value(), (int64_t)1824);
+  CHECK_EQ(f.images[1].byte_count(), f.images[1].width() * f.images[1].height() * 2);
+  auto labels = f.channel_labels();
+  CHECK_EQ(labels[0], std::string("brightfield"));
+  CHECK_EQ(labels[1], std::string("fluorescence"));
 }
 
 TEST(helpers_ole_to_datetime) {
