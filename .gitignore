@@ -11,3 +11,4 @@ out/
 !tests/data/*.tif
 *.clx
 !tests/data/*.clx
+AGENTS.local.md
