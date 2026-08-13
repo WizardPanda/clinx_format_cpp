@@ -134,7 +134,7 @@ raw pixel data.
 | Offset | Size | Type | Field | Meaning |
 |---|---|---|---|---|
 | `0x00` | 2 | `u16` | `tag` | 2-byte field varying by capture (`0xC03E`/`0xC03D`/`0x403E` observed); not a stable marker |
-| `0x02` | 4 | `u32` | `type` | Image type constant, `2` or `4` |
+| `0x02` | 4 | `u32` | `type` | Binning factor, `1`, `2`, `3` or `4` |
 | `0x06` | 4 | `u32` | `width` | Image width in pixels |
 | `0x0A` | 4 | `u32` | `height` | Image height in pixels |
 | `0x0E` | 4 | `u32` | `bits_per_sample` | Bit depth, `16` |
@@ -148,6 +148,14 @@ raw pixel data.
   a saturated channel reports `65535`).
 - `byte_count` always equals `width · height · bits_per_sample / 8`, which is
   the invariant the parser uses to reject false descriptors.
+
+The descriptor is the trailing dword block of the image's serialized object
+(`TSampleImage`), so its fields map directly to `TSampleImage` object members:
+`tag` is the high half of the 32-bit member at object offset 604, `type` =
+member 616 (binning), `width` = member 608, `height` = member 548,
+`bits_per_sample` = member 4, `max_value` = member 564, `min_value` = member
+568, `byte_count` = member 560, and the trailing `reserved` is the upper half of
+that same member.
 
 ### 4.1 Image `type` field
 
