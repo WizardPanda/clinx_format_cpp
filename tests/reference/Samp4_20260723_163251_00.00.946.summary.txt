@@ -1,5 +1,5 @@
 File            : tests/data/Samp4_20260723_163251_00.00.946.clx
-Sample          : GAPDH_20260723_163251
+Sample          : Samp4_20260723_163251
 Captured        : 2026-07-23 16:33:02.587000
 Exposure        : 946 ms
 Software        : Clx695 (format v3)

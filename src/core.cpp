@@ -229,28 +229,26 @@ std::optional<filename_info> parse_filename(const std::string& path) {
 std::optional<image_descriptor> parse_descriptor(const std::vector<uint8_t>& data,
                                                  std::size_t offset) {
   if (offset + kDescriptorSize > data.size()) return std::nullopt;
-  uint16_t marker = read_u16(data, offset);
-  // High byte 0xC0 is the stable descriptor marker; the low byte varies by
-  // capture (0x3E and 0x3D observed), so only the high byte is checked.
-  if ((marker & 0xFF00) != 0xC000) return std::nullopt;
-  uint32_t itype = read_u32(data, offset + 2);
+
+  // Identify a descriptor by its structural invariants alone. The leading
+  // 2-byte field is not a reliable marker (high byte 0xC0/0x40, low byte
+  // 0x3E/0x3D all observed), so it is deliberately ignored here. Check the most
+  // selective fields first so a full-file scan stays cheap.
   uint32_t width = read_u32(data, offset + 6);
+  if (width < 1 || width > kMaxDimension) return std::nullopt;
   uint32_t height = read_u32(data, offset + 10);
+  if (height < 1 || height > kMaxDimension) return std::nullopt;
   uint32_t bits = read_u32(data, offset + 14);
+  if (bits != 8 && bits != 16 && bits != 32) return std::nullopt;
   uint32_t mx = read_u32(data, offset + 18);
   uint32_t mn = read_u32(data, offset + 22);
   uint32_t byte_count = read_u32(data, offset + 26);
-
-  if (!(1 <= width && width <= kMaxDimension && 1 <= height &&
-        height <= kMaxDimension)) {
-    return std::nullopt;
-  }
-  if (bits != 8 && bits != 16 && bits != 32) return std::nullopt;
   if (byte_count != width * height * (bits / 8)) return std::nullopt;
   uint32_t full_scale = (uint32_t(1) << bits) - 1;
   if (mn > mx || mx > full_scale) return std::nullopt;
   if (offset + kDescriptorSize + byte_count > data.size()) return std::nullopt;
 
+  uint32_t itype = read_u32(data, offset + 2);
   image_descriptor d;
   d.offset = static_cast<int64_t>(offset);
   d.type = itype;
@@ -265,20 +263,10 @@ std::optional<image_descriptor> parse_descriptor(const std::vector<uint8_t>& dat
 
 std::vector<image_descriptor> find_descriptors(const std::vector<uint8_t>& data) {
   std::vector<image_descriptor> found;
-  std::size_t start = 0;
-  while (true) {
-    // Search for the high byte of the LE u16 marker (0xC0); the low byte varies.
-    std::size_t idx = std::string::npos;
-    for (std::size_t i = start; i + 1 < data.size(); ++i) {
-      if (data[i + 1] == 0xC0) {
-        idx = i;
-        break;
-      }
-    }
-    if (idx == std::string::npos) break;
-    auto desc = parse_descriptor(data, idx);
+  if (data.size() < kDescriptorSize) return found;
+  for (std::size_t i = 0; i + kDescriptorSize <= data.size(); ++i) {
+    auto desc = parse_descriptor(data, i);
     if (desc) found.push_back(*desc);
-    start = idx + 2;
   }
   return found;
 }
@@ -591,7 +579,7 @@ clx_file parse(const std::vector<uint8_t>& data, const std::string& path) {
   f.magic = magic;
   f.capture_time = ole_to_datetime(read_f64(data, 0x0C));
   f.exposure_ms = read_u32(data, 0x14);
-  f.sample_name = read_cstr(data, 0x18, 22);
+  f.sample_name = read_cstr(data, 0x18, kSampleNameMaxSize);
   f.format_version = read_u32(data, 0x0124);
   f.software = read_cstr(data, 0x0128, 0x100);
   std::string build_date_text = read_cstr(data, 0x0228, 0x100);

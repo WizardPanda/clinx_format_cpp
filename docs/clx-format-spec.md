@@ -66,8 +66,8 @@ The header occupies `0x0000`–`0x0123`.
 | `0x008` | 4 | `u32` | `field_2` | Constant `6` (semantics unknown) |
 | `0x00C` | 8 | `f64` | `capture_time` | OLE Automation Date (see below) |
 | `0x014` | 4 | `u32` | `exposure_ms` | Exposure duration in milliseconds |
-| `0x018` | 22 | `char[22]` | `sample_name` | Null-padded ASCII sample name |
-| `0x02E` | 246 | — | *(opaque)* | Leftover C++ heap pointers; not metadata |
+| `0x018` | *var* | `char[]` | `sample_name` | Null-terminated ASCII sample name (full capture stem) |
+| *(after NUL)* | — | — | *(opaque)* | Leftover C++ heap pointers; not metadata |
 
 ### 2.1 Capture time (OLE Automation Date)
 
@@ -84,16 +84,19 @@ this value; treat the header value as the authoritative capture time.
 
 ### 2.2 Sample name
 
-`sample_name` is a fixed 22-byte ASCII field, null-padded when shorter. In the
-observed files it holds the full capture stem, e.g. `Samp1_20260804_161544`
-(22 characters, exactly filling the field).
+`sample_name` is a **variable-length, null-terminated** ASCII string holding the
+full capture stem (sample + `_` + date + `_` + time), e.g.
+`Samp1_20260804_161544`. Its length is not fixed by the format: the instrument
+copies the capture's filename stem verbatim, so the only practical bound is the
+Windows filename length (~240 characters). The parser reads it up to the next
+NUL byte (capped at the version block at `0x0124`).
 
 ### 2.3 Opaque header region
 
-Bytes `0x02E`–`0x123` contain small structural constants interleaved with what
-appear to be un-relocated memory addresses (heap pointers) left over from a C++
-serialization. They carry no stable, interpretable meaning and are exposed
-verbatim as `ClxFile.raw_header`.
+Bytes after the sample name's NUL terminator up to `0x123` contain small
+structural constants interleaved with what appear to be un-relocated memory
+addresses (heap pointers) left over from a C++ serialization. They carry no
+stable, interpretable meaning and are exposed verbatim as `ClxFile.raw_header`.
 
 ---
 
@@ -122,7 +125,7 @@ raw pixel data.
 
 | Offset | Size | Type | Field | Meaning |
 |---|---|---|---|---|
-| `0x00` | 2 | `u16` | `marker` | High byte `0xC0` identifies a descriptor; low byte varies by capture (`0x3E`/`0x3D` observed) |
+| `0x00` | 2 | `u16` | `tag` | 2-byte field varying by capture (`0xC03E`/`0xC03D`/`0x403E` observed); not a stable marker |
 | `0x02` | 4 | `u32` | `type` | Image type constant, `2` or `4` |
 | `0x06` | 4 | `u32` | `width` | Image width in pixels |
 | `0x0A` | 4 | `u32` | `height` | Image height in pixels |
@@ -145,8 +148,10 @@ Observed values:
 
 | File | `type` |
 |---|---|
-| `Samp1` (687×550, binned) | `4` |
+| `Samp6` (2750×2200, full resolution) | `1` |
 | `Samp2` (1375×1100, full resolution) | `2` |
+| `Samp3` (916×733, binned) | `3` |
+| `Samp1` (687×550, binned) | `4` |
 
 Its semantics are not known; it may encode an acquisition mode, pixel storage
 variant, or camera configuration.
@@ -154,10 +159,10 @@ variant, or camera configuration.
 ### 4.2 Descriptor discovery
 
 Because the descriptor position is tied to a fixed header layout that may differ
-between software versions, `clxparser` does **not** rely on hard-coded offsets.
-Instead it scans the file for the descriptor marker — any `u16` whose high byte
-is `0xC0` (the low byte varies by capture, e.g. `0xC03E` and `0xC03D`) — and
-keeps only candidates that satisfy all of:
+between software versions, and because the leading 2-byte field is not a stable
+marker (its high byte `0xC0`/`0x40` and low byte `0x3E`/`0x3D` both vary by
+capture), `clxparser` does **not** rely on hard-coded offsets or a marker. It
+scans every byte offset and keeps only candidates that satisfy all of:
 
 1. `1 ≤ width ≤ 8192` and `1 ≤ height ≤ 8192`;
 2. `bits_per_sample ∈ {8, 16, 32}`;
@@ -165,7 +170,7 @@ keeps only candidates that satisfy all of:
 4. `0 ≤ min_value ≤ max_value ≤ 2^bits − 1`;
 5. the descriptor plus its pixel data fits inside the file.
 
-This combination is extremely selective — in the two real captures the scan
+This combination is extremely selective — in every observed capture the scan
 finds exactly two descriptors and zero false positives inside the raw pixel
 data.
 
@@ -252,20 +257,20 @@ verbatim as `ClxFile.trailer` and partially decoded into
 
 ## 8. Reference captures
 
-The test suite ships two anonymized captures in `tests/data/`:
+The test suite ships seven anonymized captures in `tests/data/`:
 
-| Property | `Samp1_…_00.06.946.clx` | `Samp2_…_00.00.332.clx` |
-|---|---|---|
-| Resolution | 687 × 550 | 1375 × 1100 |
-| Bit depth | 16 | 16 |
-| Image `type` | 4 | 2 |
-| Exposure | 6946 ms | 332 ms |
-| Capture | 2026-08-04 16:15:57 | 2026-07-17 19:44:02 |
-| Channel 0 min/max | 0 / 65535 | 0 / 65535 |
-| Channel 1 min/max | 1200 / 65535 | 0 / 26182 |
+| Property | `Samp1` | `Samp2` | `Samp3` | `Samp4` | `Samp5` | `Samp6` | `Samp7` |
+|---|---|---|---|---|---|---|---|
+| Resolution | 687×550 | 1375×1100 | 916×733 | 687×550 | 687×550 | 2750×2200 | 1375×1100 |
+| Image `type` | 4 | 2 | 3 | 4 | 4 | 1 | 2 |
+| Exposure | 6946 ms | 332 ms | 90000 ms | 946 ms | 260 ms | 83279 ms | 7453 ms |
+| Channel 0 min/max | 0/65535 | 0/65535 | 500/65535 | 160/65535 | 52/65535 | 0/65535 | 0/65535 |
+| Channel 1 min/max | 1200/65535 | 0/26182 | 1824/65535 | 1218/32782 | 1206/27752 | 0/7788 | 0/51796 |
 
-Both were captured with the same device (software `Clx695`, format version 3,
-build 2023-12-28), at different binning/exposure settings.
+All were captured with the same device (software `Clx695`, format version 3,
+build 2023-12-28), at different binning/exposure settings. `Samp5` uses
+descriptor tag `0x403E` (others use `0xC03E`/`0xC03D`); `Samp6` is the only
+observed `type == 1` capture.
 
 ---
 
@@ -273,11 +278,11 @@ build 2023-12-28), at different binning/exposure settings.
 
 The following are documented but not fully understood:
 
-- **`type` field** (2 vs 4) — constant per capture; meaning unknown.
+- **`type` field** (1/2/3/4) — constant per capture; meaning unknown.
 - **Header `field_1` / `field_2`** (both `6`) — unknown.
 - **Opaque header/trailer regions** — contain un-relocated heap pointers.
 - **Descriptor `reserved`** field — always `0`.
-- **Trailer length** — 6456 bytes in both samples; may vary with settings.
+- **Trailer length** — 6456 bytes in every observed capture; may vary with settings.
 - **Compatibility** — the layout was derived from one device / software version;
   other Clinx products or software builds may write different fields, offsets,
   more images, or compressed pixels. Validate the parser against your own

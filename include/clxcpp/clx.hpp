@@ -14,10 +14,16 @@ namespace clxcpp {
 // Format constants (little-endian throughout). See docs/clx-format-spec.md.
 constexpr uint32_t kMagic = 0x000025EB;
 constexpr std::size_t kHeaderSize = 0x0124;
+// Sample name is a variable-length, null-terminated ASCII string at 0x18. Its
+// only bound is the fixed header size (it cannot extend into the version block
+// at kHeaderSize), so names up to ~240 chars - limited by the Windows filename,
+// not by a fixed field - are stored verbatim.
+constexpr std::size_t kSampleNameMaxSize = kHeaderSize - 0x18;  // 0x10C
 constexpr std::size_t kDescriptorSize = 34;
-// Descriptor marker: the high byte 0xC0 is stable; the low byte varies by
-// capture (0x3E and 0x3D observed), so only the high byte is validated.
-constexpr uint16_t kDescriptorMarker = 0xC000;
+// The leading 2-byte descriptor field is NOT a stable marker: both its high
+// byte (0xC0 and 0x40 observed) and its low byte (0x3E and 0x3D observed) vary
+// by capture. Descriptors are identified by their structural invariants (see
+// parse_descriptor), not by this field.
 constexpr int64_t kMaxDimension = 8192;
 constexpr const char* kBuildDateString = "202312281113";
 

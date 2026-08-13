@@ -6,6 +6,58 @@ static std::string data_dir() {
   return CLXCPP_TEST_DATA_DIR;
 }
 
+namespace {
+
+// Build a minimal, self-contained .clx in memory: a valid magic + version
+// block, a sample name, and two 16-bit image descriptors (with the given marker
+// word) followed by pixel data. Used to exercise descriptor discovery without
+// relying on the golden capture files.
+std::vector<uint8_t> make_synthetic_clx(uint16_t marker, int width, int height,
+                                        const std::string& sample_name) {
+  const std::size_t byte_count = static_cast<std::size_t>(width) * height * 2;
+  const std::size_t desc0 = 0x400;
+  const std::size_t desc1 = desc0 + kDescriptorSize + byte_count;
+  std::vector<uint8_t> data(desc1 + kDescriptorSize + byte_count, 0);
+
+  auto w16 = [&](std::size_t off, uint16_t v) {
+    data[off] = static_cast<uint8_t>(v & 0xFF);
+    data[off + 1] = static_cast<uint8_t>(v >> 8);
+  };
+  auto w32 = [&](std::size_t off, uint32_t v) {
+    data[off] = static_cast<uint8_t>(v & 0xFF);
+    data[off + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+    data[off + 2] = static_cast<uint8_t>((v >> 16) & 0xFF);
+    data[off + 3] = static_cast<uint8_t>((v >> 24) & 0xFF);
+  };
+
+  w32(0, kMagic);
+  for (std::size_t i = 0; i < sample_name.size() && i < kSampleNameMaxSize; ++i) {
+    data[0x18 + i] = static_cast<uint8_t>(sample_name[i]);
+  }
+  w32(0x0124, 3);  // format_version
+  const char* soft = "Clx695";
+  for (std::size_t i = 0; soft[i]; ++i) {
+    data[0x0128 + i] = static_cast<uint8_t>(soft[i]);
+  }
+
+  auto place = [&](std::size_t off) {
+    w16(off, marker);
+    w32(off + 2, 4);  // type
+    w32(off + 6, static_cast<uint32_t>(width));
+    w32(off + 10, static_cast<uint32_t>(height));
+    w32(off + 14, 16);  // bits_per_sample
+    w32(off + 18, 65535);  // max_value
+    w32(off + 22, 0);  // min_value
+    w32(off + 26, static_cast<uint32_t>(byte_count));
+    w32(off + 30, 0);  // reserved
+  };
+  place(desc0);
+  place(desc1);
+  return data;
+}
+
+}  // namespace
+
 TEST(core_magic_and_version) {
   for (auto key : {"Samp1_20260804_161544_00.06.946",
                    "Samp2_20260717_194348_00.00.332"}) {
@@ -123,7 +175,7 @@ TEST(core_samp3_metadata) {
   // stable channel order (0=brightfield, 1=fluorescence) still applies.
   clx_file f = load(data_dir() + "/Samp3_20250721_183436_01.30.000.clx");
   CHECK_EQ(f.magic, kMagic);
-  CHECK_EQ(f.sample_name, std::string("K82_20250721_183436"));
+  CHECK_EQ(f.sample_name, std::string("Samp3_20250721_183436"));
   CHECK_EQ(f.exposure_ms, (int64_t)90000);
   CHECK_EQ(f.software, std::string("Clx695"));
   CHECK_EQ(f.format_version, (int64_t)3);
@@ -144,11 +196,11 @@ TEST(core_samp3_metadata) {
 }
 
 TEST(core_samp4_metadata) {
-  // Samp4 uses descriptor marker 0xC03D (others use 0xC03E); the high byte
-  // 0xC0 is the stable discriminator. Regression test for marker tolerance.
+  // Samp4 uses descriptor marker 0xC03D (others use 0xC03E). Descriptors are
+  // identified by structural invariants, so the low byte variance is tolerated.
   clx_file f = load(data_dir() + "/Samp4_20260723_163251_00.00.946.clx");
   CHECK_EQ(f.magic, kMagic);
-  CHECK_EQ(f.sample_name, std::string("GAPDH_20260723_163251"));
+  CHECK_EQ(f.sample_name, std::string("Samp4_20260723_163251"));
   CHECK_EQ(f.exposure_ms, (int64_t)946);
   CHECK_EQ(f.software, std::string("Clx695"));
   CHECK_EQ(f.format_version, (int64_t)3);
@@ -163,6 +215,103 @@ TEST(core_samp4_metadata) {
   auto labels = f.channel_labels();
   CHECK_EQ(labels[0], std::string("brightfield"));
   CHECK_EQ(labels[1], std::string("fluorescence"));
+}
+
+TEST(core_samp5_metadata) {
+  // Samp5 uses descriptor tag 0x403E (high byte 0x40, not 0xC0); regression test
+  // for structural-invariant descriptor discovery.
+  clx_file f = load(data_dir() + "/Samp5_20260813_110119_00.00.260.clx");
+  CHECK_EQ(f.magic, kMagic);
+  CHECK_EQ(f.sample_name, std::string("Samp5_20260813_110119"));
+  CHECK_EQ(f.exposure_ms, (int64_t)260);
+  CHECK_EQ(f.software, std::string("Clx695"));
+  CHECK_EQ(f.format_version, (int64_t)3);
+  CHECK_EQ(f.image_count(), (std::size_t)2);
+  CHECK_EQ(f.images[0].width(), (int64_t)687);
+  CHECK_EQ(f.images[0].height(), (int64_t)550);
+  CHECK_EQ(f.images[0].type(), (int64_t)4);
+  CHECK_EQ(f.images[0].min_value(), (int64_t)52);
+  CHECK_EQ(f.images[0].max_value(), (int64_t)65535);
+  CHECK_EQ(f.images[1].min_value(), (int64_t)1206);
+  CHECK_EQ(f.images[1].max_value(), (int64_t)27752);
+  auto labels = f.channel_labels();
+  CHECK_EQ(labels[0], std::string("brightfield"));
+  CHECK_EQ(labels[1], std::string("fluorescence"));
+}
+
+TEST(core_samp6_metadata) {
+  // Samp6 is the largest capture (2750x2200, type 1) with a long exposure.
+  clx_file f = load(data_dir() + "/Samp6_20250512_110653_01.23.279.clx");
+  CHECK_EQ(f.magic, kMagic);
+  CHECK_EQ(f.sample_name, std::string("Samp6_20250512_110653"));
+  CHECK_EQ(f.exposure_ms, (int64_t)83279);
+  CHECK_EQ(f.software, std::string("Clx695"));
+  CHECK_EQ(f.format_version, (int64_t)3);
+  CHECK_EQ(f.image_count(), (std::size_t)2);
+  CHECK_EQ(f.images[0].width(), (int64_t)2750);
+  CHECK_EQ(f.images[0].height(), (int64_t)2200);
+  CHECK_EQ(f.images[0].type(), (int64_t)1);
+  CHECK_EQ(f.images[0].min_value(), (int64_t)0);
+  CHECK_EQ(f.images[0].max_value(), (int64_t)65535);
+  CHECK_EQ(f.images[1].min_value(), (int64_t)0);
+  CHECK_EQ(f.images[1].max_value(), (int64_t)7788);
+  CHECK_EQ(f.images[1].byte_count(), f.images[1].width() * f.images[1].height() * 2);
+  auto labels = f.channel_labels();
+  CHECK_EQ(labels[0], std::string("brightfield"));
+  CHECK_EQ(labels[1], std::string("fluorescence"));
+}
+
+TEST(core_samp7_metadata) {
+  // Samp7 is a full-resolution (1375x1100, type 2) capture with a 3-part sample
+  // stem; regression test for names containing extra underscores.
+  clx_file f = load(data_dir() + "/Samp7_20260319_211250_00.07.453.clx");
+  CHECK_EQ(f.magic, kMagic);
+  CHECK_EQ(f.sample_name, std::string("Samp7_20260319_211250"));
+  CHECK_EQ(f.exposure_ms, (int64_t)7453);
+  CHECK_EQ(f.software, std::string("Clx695"));
+  CHECK_EQ(f.format_version, (int64_t)3);
+  CHECK_EQ(f.image_count(), (std::size_t)2);
+  CHECK_EQ(f.images[0].width(), (int64_t)1375);
+  CHECK_EQ(f.images[0].height(), (int64_t)1100);
+  CHECK_EQ(f.images[0].type(), (int64_t)2);
+  CHECK_EQ(f.images[0].min_value(), (int64_t)0);
+  CHECK_EQ(f.images[0].max_value(), (int64_t)65535);
+  CHECK_EQ(f.images[1].min_value(), (int64_t)0);
+  CHECK_EQ(f.images[1].max_value(), (int64_t)51796);
+  auto labels = f.channel_labels();
+  CHECK_EQ(labels[0], std::string("brightfield"));
+  CHECK_EQ(labels[1], std::string("fluorescence"));
+}
+
+TEST(core_descriptor_marker_variants) {
+  // The leading 2-byte descriptor field is not a stable marker: 0xC03E, 0xC03D
+  // and 0x403E have all been observed. Descriptor discovery must therefore rely
+  // on structural invariants, not on the high byte being 0xC0.
+  const uint16_t markers[] = {0xC03E, 0xC03D, 0x403E};
+  for (uint16_t marker : markers) {
+    auto data = make_synthetic_clx(marker, 687, 550, "S");
+    clx_file f = parse(data, "synthetic.clx");
+    CHECK_EQ(f.image_count(), (std::size_t)2);
+    CHECK_EQ(f.images[0].width(), (int64_t)687);
+    CHECK_EQ(f.images[0].height(), (int64_t)550);
+    CHECK_EQ(f.images[0].byte_count(), (int64_t)687 * 550 * 2);
+    CHECK_EQ(f.images[1].descriptor.offset,
+             (int64_t)(0x400 + kDescriptorSize + 687 * 550 * 2));
+  }
+}
+
+TEST(core_long_sample_name) {
+  // The header sample name is a variable-length null-terminated string, not a
+  // fixed-width field: a long capture stem (bounded by the Windows filename, not
+  // by the file format) must be stored verbatim, not truncated.
+  std::string name;
+  for (int i = 0; i < 24; ++i) name += "abcdefgh";  // 192 chars
+  name += "0123456789";                              // 202 chars total
+  CHECK_EQ(name.size(), (std::size_t)202);
+  auto data = make_synthetic_clx(0x403Eu, 2, 2, name);
+  clx_file f = parse(data, "synthetic.clx");
+  CHECK_EQ(f.sample_name, name);
+  CHECK_EQ(f.image_count(), (std::size_t)2);
 }
 
 TEST(helpers_ole_to_datetime) {
