@@ -175,17 +175,24 @@ capture is stored at `⌊2750/type⌋ × ⌊2200/type⌋`. `1` is full resolutio
 
 ### 4.2 Descriptor discovery
 
-Because the descriptor position is tied to a fixed header layout that may differ
-between software versions, and because the leading 2-byte field is not a stable
-marker (its high byte `0xC0`/`0x40` and low byte `0x3E`/`0x3D` both vary by
-capture), `clxparser` does **not** rely on hard-coded offsets or a marker. It
-scans every byte offset and keeps only candidates that satisfy all of:
+The parser reads descriptors in two tiers.
 
-1. `1 ≤ width ≤ 8192` and `1 ≤ height ≤ 8192`;
-2. `bits_per_sample ∈ {8, 16, 32}`;
-3. `byte_count == width · height · bits_per_sample / 8`;
-4. `0 ≤ min_value ≤ max_value ≤ 2^bits − 1`;
-5. the descriptor plus its pixel data fits inside the file.
+1. **Official layout (fast path).** The reverse-engineered object layout is
+   known, so the parser reads each image block at the fixed offset `0x0124` and
+   then advances by `block size + byte_count`. It dispatches on the image format
+   version (currently `3`) and reads `type`/`width`/`height`/`bits`/`min`/`max`/
+   `byte_count` directly — exactly like the instrument's own reader. This is an
+   O(1) lookup, no scanning.
+
+2. **Structural-invariant scan (fallback).** If the fixed layout does not match
+   (a different software version wrote different offsets), the parser falls back
+   to scanning every byte offset and keeps only candidates that satisfy all of:
+
+   1. `1 ≤ width ≤ 8192` and `1 ≤ height ≤ 8192`;
+   2. `bits_per_sample ∈ {8, 16, 32}`;
+   3. `byte_count == width · height · bits_per_sample / 8`;
+   4. `0 ≤ min_value ≤ max_value ≤ 2^bits − 1`;
+   5. the descriptor plus its pixel data fits inside the file.
 
 This combination is extremely selective — in every observed capture the scan
 finds exactly two descriptors and zero false positives inside the raw pixel

@@ -24,6 +24,11 @@ uint16_t read_u16(const std::vector<uint8_t>& d, std::size_t off) {
   return static_cast<uint16_t>(d[off]) | (static_cast<uint16_t>(d[off + 1]) << 8);
 }
 
+uint64_t read_u64(const std::vector<uint8_t>& d, std::size_t off) {
+  return static_cast<uint64_t>(read_u32(d, off)) |
+         (static_cast<uint64_t>(read_u32(d, off + 4)) << 32);
+}
+
 double read_f64(const std::vector<uint8_t>& d, std::size_t off) {
   uint64_t lo = read_u32(d, off);
   uint64_t hi = read_u32(d, off + 4);
@@ -555,6 +560,85 @@ std::string clx_file::to_json() const {
   return os.str();
 }
 
+namespace {
+
+// Offsets within a per-image block, as serialized by TSampleImage (reverse-
+// engineered from the official Clx695 software). Each image block begins with a
+// 4-byte format-version word, then two 0x100-byte strings (name + build date),
+// then the descriptor dwords. Pixel data follows the block.
+constexpr std::size_t kImgBlockSize = 0x22C;  // version(4) + name(0x100) + build(0x100) + descriptor(40)
+constexpr std::size_t kImgVersion = 0x000;
+constexpr std::size_t kImgType = 0x20C;    // u32; binning factor
+constexpr std::size_t kImgWidth = 0x210;
+constexpr std::size_t kImgHeight = 0x214;
+constexpr std::size_t kImgBits = 0x218;
+constexpr std::size_t kImgMax = 0x21C;
+constexpr std::size_t kImgMin = 0x220;
+constexpr std::size_t kImgByteCount = 0x224;  // u64
+
+// "Official" reader: parse images at the known fixed offsets (no scan). Returns
+// false when the layout does not match, so the caller falls back to the
+// structural-invariant scan.
+bool try_parse_official(const std::vector<uint8_t>& data,
+                        std::vector<clx_image>& images,
+                        std::vector<uint8_t>& trailer) {
+  if (data.size() < kHeaderSize + kImgBlockSize) return false;
+
+  std::vector<clx_image> found;
+  std::size_t pos = kHeaderSize;  // first image block at 0x124
+  while (pos + kImgBlockSize <= data.size()) {
+    if (read_u32(data, pos + kImgVersion) != 3) break;  // trailer or unknown
+
+    uint32_t width = read_u32(data, pos + kImgWidth);
+    uint32_t height = read_u32(data, pos + kImgHeight);
+    uint32_t bits = read_u32(data, pos + kImgBits);
+    uint32_t mx = read_u32(data, pos + kImgMax);
+    uint32_t mn = read_u32(data, pos + kImgMin);
+    uint64_t byte_count = read_u64(data, pos + kImgByteCount);
+
+    if (width < 1 || width > kMaxDimension) return false;
+    if (height < 1 || height > kMaxDimension) return false;
+    if (bits != 8 && bits != 16 && bits != 32) return false;
+    if (byte_count != static_cast<uint64_t>(width) * height * (bits / 8)) {
+      return false;
+    }
+    uint32_t full_scale = (uint32_t(1) << bits) - 1;
+    if (mn > mx || mx > full_scale) return false;
+    if (pos + kImgBlockSize + byte_count > data.size()) return false;
+
+    image_descriptor d;
+    // Keep the descriptor offset on the 2-byte tag so that pixel_offset()
+    // (offset + kDescriptorSize) lands exactly on the pixel data and matches the
+    // scan fallback's output byte-for-byte.
+    d.offset = static_cast<int64_t>(pos + kImgBlockSize - kDescriptorSize);
+    d.type = read_u32(data, pos + kImgType);
+    d.width = width;
+    d.height = height;
+    d.bits_per_sample = bits;
+    d.max_value = mx;
+    d.min_value = mn;
+    d.byte_count = static_cast<int64_t>(byte_count);
+
+    clx_image img;
+    img.index = static_cast<int>(found.size());
+    img.descriptor = d;
+    std::size_t start = pos + kImgBlockSize;
+    img.pixel_buf.assign(
+        data.begin() + static_cast<std::ptrdiff_t>(start),
+        data.begin() + static_cast<std::ptrdiff_t>(start + byte_count));
+    found.push_back(std::move(img));
+
+    pos += kImgBlockSize + static_cast<std::size_t>(byte_count);
+  }
+
+  if (found.empty()) return false;
+  images = std::move(found);
+  trailer.assign(data.begin() + static_cast<std::ptrdiff_t>(pos), data.end());
+  return true;
+}
+
+}  // namespace
+
 clx_file parse(const std::vector<uint8_t>& data, const std::string& path) {
   if (data.size() < kHeaderSize + kDescriptorSize) {
     throw format_error("file too small to be a .clx capture");
@@ -585,28 +669,31 @@ clx_file parse(const std::vector<uint8_t>& data, const std::string& path) {
   std::string build_date_text = read_cstr(data, 0x0228, 0x100);
   f.build_datetime = parse_build_date(build_date_text);
 
-  auto descriptors = find_descriptors(data);
-  if (descriptors.empty()) {
-    throw format_error("no valid image descriptors found in file");
+  if (!try_parse_official(data, f.images, f.trailer)) {
+    auto descriptors = find_descriptors(data);
+    if (descriptors.empty()) {
+      throw format_error("no valid image descriptors found in file");
+    }
+
+    for (std::size_t index = 0; index < descriptors.size(); ++index) {
+      const auto& desc = descriptors[index];
+      clx_image img;
+      img.index = static_cast<int>(index);
+      img.descriptor = desc;
+      std::size_t start = static_cast<std::size_t>(desc.pixel_offset());
+      img.pixel_buf.assign(
+          data.begin() + static_cast<std::ptrdiff_t>(start),
+          data.begin() + static_cast<std::ptrdiff_t>(start + desc.byte_count));
+      f.images.push_back(std::move(img));
+    }
+
+    const auto& last = descriptors.back();
+    std::size_t last_end =
+        static_cast<std::size_t>(last.pixel_offset() + last.byte_count);
+    f.trailer.assign(data.begin() + static_cast<std::ptrdiff_t>(last_end),
+                     data.end());
   }
 
-  for (std::size_t index = 0; index < descriptors.size(); ++index) {
-    const auto& desc = descriptors[index];
-    clx_image img;
-    img.index = static_cast<int>(index);
-    img.descriptor = desc;
-    std::size_t start = static_cast<std::size_t>(desc.pixel_offset());
-    img.pixel_buf.assign(data.begin() + static_cast<std::ptrdiff_t>(start),
-                         data.begin() +
-                             static_cast<std::ptrdiff_t>(start + desc.byte_count));
-    f.images.push_back(std::move(img));
-  }
-
-  const auto& last = descriptors.back();
-  std::size_t last_end =
-      static_cast<std::size_t>(last.pixel_offset() + last.byte_count);
-  f.trailer.assign(data.begin() + static_cast<std::ptrdiff_t>(last_end),
-                   data.end());
   f.raw_header.assign(data.begin(),
                       data.begin() + static_cast<std::ptrdiff_t>(kHeaderSize));
   f.raw_trailer_info_ = parse_trailer_info(f.trailer, f.exposure_ms);
