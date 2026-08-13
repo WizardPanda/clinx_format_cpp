@@ -199,7 +199,7 @@ Every observed capture contains two images in a **stable order**:
 The order matches the instrument software's own export and is identical across
 every observed capture, so `ClxFile.channel_labels()` returns
 `{0: "brightfield", 1: "fluorescence"}` for two-image captures. The descriptor
-`type` field is a per-capture mode constant (2/3/4 observed) and does not
+`type` field is a per-capture mode constant (1/2/3/4 observed) and does not
 identify the channel.
 
 ---
