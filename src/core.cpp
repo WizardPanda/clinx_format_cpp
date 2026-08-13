@@ -565,9 +565,11 @@ namespace {
 // Offsets within a per-image block, as serialized by TSampleImage (reverse-
 // engineered from the official Clx695 software). Each image block begins with a
 // 4-byte format-version word, then two 0x100-byte strings (name + build date),
-// then the descriptor dwords. Pixel data follows the block.
+// then the descriptor dwords. Pixel data follows the block. The V1 image block
+// layout is stable across format versions; the version word only controls how
+// many extra V2/V3 sections follow (all after the images), so it is not used to
+// locate images.
 constexpr std::size_t kImgBlockSize = 0x22C;  // version(4) + name(0x100) + build(0x100) + descriptor(40)
-constexpr std::size_t kImgVersion = 0x000;
 constexpr std::size_t kImgType = 0x20C;    // u32; binning factor
 constexpr std::size_t kImgWidth = 0x210;
 constexpr std::size_t kImgHeight = 0x214;
@@ -576,9 +578,12 @@ constexpr std::size_t kImgMax = 0x21C;
 constexpr std::size_t kImgMin = 0x220;
 constexpr std::size_t kImgByteCount = 0x224;  // u64
 
-// "Official" reader: parse images at the known fixed offsets (no scan). Returns
-// false when the layout does not match, so the caller falls back to the
-// structural-invariant scan.
+// "Official" reader: parse images at the known fixed offsets (no scan). An image
+// block is recognised by its descriptor's structural invariants (byte_count ==
+// width * height * bits / 8, etc.), not by the version word, so it works for any
+// format version whose V1 image layout is the same. Returns false when the
+// layout does not match, so the caller falls back to the structural-invariant
+// scan.
 bool try_parse_official(const std::vector<uint8_t>& data,
                         std::vector<clx_image>& images,
                         std::vector<uint8_t>& trailer) {
@@ -587,8 +592,6 @@ bool try_parse_official(const std::vector<uint8_t>& data,
   std::vector<clx_image> found;
   std::size_t pos = kHeaderSize;  // first image block at 0x124
   while (pos + kImgBlockSize <= data.size()) {
-    if (read_u32(data, pos + kImgVersion) != 3) break;  // trailer or unknown
-
     uint32_t width = read_u32(data, pos + kImgWidth);
     uint32_t height = read_u32(data, pos + kImgHeight);
     uint32_t bits = read_u32(data, pos + kImgBits);
@@ -596,15 +599,16 @@ bool try_parse_official(const std::vector<uint8_t>& data,
     uint32_t mn = read_u32(data, pos + kImgMin);
     uint64_t byte_count = read_u64(data, pos + kImgByteCount);
 
-    if (width < 1 || width > kMaxDimension) return false;
-    if (height < 1 || height > kMaxDimension) return false;
-    if (bits != 8 && bits != 16 && bits != 32) return false;
-    if (byte_count != static_cast<uint64_t>(width) * height * (bits / 8)) {
-      return false;
+    bool valid = width >= 1 && width <= kMaxDimension && height >= 1 &&
+                 height <= kMaxDimension && (bits == 8 || bits == 16 || bits == 32) &&
+                 byte_count == static_cast<uint64_t>(width) * height * (bits / 8) &&
+                 mn <= mx && mx <= (uint32_t(1) << bits) - 1 &&
+                 pos + kImgBlockSize + byte_count <= data.size();
+
+    if (!valid) {
+      if (found.empty()) return false;  // first block is not an image: wrong layout
+      break;                            // trailer follows the last image
     }
-    uint32_t full_scale = (uint32_t(1) << bits) - 1;
-    if (mn > mx || mx > full_scale) return false;
-    if (pos + kImgBlockSize + byte_count > data.size()) return false;
 
     image_descriptor d;
     // Keep the descriptor offset on the 2-byte tag so that pixel_offset()

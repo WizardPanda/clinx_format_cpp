@@ -179,9 +179,11 @@ The parser reads descriptors in two tiers.
 
 1. **Official layout (fast path).** The reverse-engineered object layout is
    known, so the parser reads each image block at the fixed offset `0x0124` and
-   then advances by `block size + byte_count`. It dispatches on the image format
-   version (currently `3`) and reads `type`/`width`/`height`/`bits`/`min`/`max`/
-   `byte_count` directly — exactly like the instrument's own reader. This is an
+   then advances by `block size + byte_count`. It reads
+   `type`/`width`/`height`/`bits`/`min`/`max`/`byte_count` directly — exactly
+   like the instrument's own reader. An image block is recognised by its
+   descriptor's structural invariants, so this works for any format version
+   (the version word only controls how many trailing V2/V3 sections exist).
    O(1) lookup, no scanning.
 
 2. **Structural-invariant scan (fallback).** If the fixed layout does not match
