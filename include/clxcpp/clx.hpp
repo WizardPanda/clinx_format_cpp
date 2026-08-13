@@ -14,11 +14,11 @@ namespace clxcpp {
 // Format constants (little-endian throughout). See docs/clx-format-spec.md.
 constexpr uint32_t kMagic = 0x000025EB;
 constexpr std::size_t kHeaderSize = 0x0124;
-// Sample name is a variable-length, null-terminated ASCII string at 0x18. Its
-// only bound is the fixed header size (it cannot extend into the version block
-// at kHeaderSize), so names up to ~240 chars - limited by the Windows filename,
-// not by a fixed field - are stored verbatim.
-constexpr std::size_t kSampleNameMaxSize = kHeaderSize - 0x18;  // 0x10C
+// Sample name is a fixed 256-byte (0x100) null-terminated ASCII field at 0x18.
+// The instrument copies the capture's filename stem into it verbatim, so the
+// name length is bounded in practice by the Windows filename limit (~241 chars);
+// bytes after the NUL terminator inside the field are uninitialized.
+constexpr std::size_t kSampleNameMaxSize = 0x100;
 constexpr std::size_t kDescriptorSize = 34;
 // The leading 2-byte descriptor field is NOT a stable marker: both its high
 // byte (0xC0 and 0x40 observed) and its low byte (0x3E and 0x3D observed) vary

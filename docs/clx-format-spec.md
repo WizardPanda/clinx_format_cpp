@@ -61,13 +61,21 @@ The header occupies `0x0000`–`0x0123`.
 
 | Offset | Size | Type | Name | Meaning |
 |---|---|---|---|---|
-| `0x000` | 4 | `u32` | `magic` | Format signature, always `0x000025EB` |
-| `0x004` | 4 | `u32` | `field_1` | Constant `6` (semantics unknown) |
-| `0x008` | 4 | `u32` | `field_2` | Constant `6` (semantics unknown) |
+| `0x000` | 4 | `u32` | `magic` | Format signature, always `0x000025EB` (9707) |
+| `0x004` | 4 | `u32` | `version` | Constant `6` (serialization structure version) |
+| `0x008` | 4 | `u32` | `version` | Same value repeated (`6`) |
 | `0x00C` | 8 | `f64` | `capture_time` | OLE Automation Date (see below) |
 | `0x014` | 4 | `u32` | `exposure_ms` | Exposure duration in milliseconds |
-| `0x018` | *var* | `char[]` | `sample_name` | Null-terminated ASCII sample name (full capture stem) |
-| *(after NUL)* | — | — | *(opaque)* | Leftover C++ heap pointers; not metadata |
+| `0x018` | 256 | `char[0x100]` | `sample_name` | Null-terminated ASCII sample name (full capture stem) |
+| `0x118` | 4 | `u32` | *(opaque)* | Constant `4` |
+| `0x11C` | 4 | `u32` | *(opaque)* | Constant `0` |
+| `0x120` | 4 | — | *(opaque)* | Padding |
+
+The header is a Delphi object serialization: the instrument software (`Clx695`)
+writes its `TSampleEntity` capture structure to the file via a `TFileStream`,
+field by field. The `magic` (9707) and `version` (`6`) are stored in that object;
+the sample-name field is a fixed `char[0x100]` buffer filled with the capture's
+filename stem and left null-terminated.
 
 ### 2.1 Capture time (OLE Automation Date)
 
@@ -84,18 +92,18 @@ this value; treat the header value as the authoritative capture time.
 
 ### 2.2 Sample name
 
-`sample_name` is a **variable-length, null-terminated** ASCII string holding the
-full capture stem (sample + `_` + date + `_` + time), e.g.
-`Samp1_20260804_161544`. Its length is not fixed by the format: the instrument
-copies the capture's filename stem verbatim, so the only practical bound is the
-Windows filename length (~240 characters). The parser reads it up to the next
-NUL byte (capped at the version block at `0x0124`).
+`sample_name` is a fixed **256-byte (`0x100`)** field holding the full capture
+stem (sample + `_` + date + `_` + time) as a null-terminated ASCII string, e.g.
+`Samp1_20260804_161544`. The instrument copies the capture's filename stem into
+this buffer verbatim, so the name length is bounded in practice by the Windows
+filename limit (~241 characters); bytes after the NUL terminator inside the
+field are uninitialized and carry no meaning. The parser reads up to the first
+NUL byte.
 
-### 2.3 Opaque header region
+### 2.3 Remaining header fields
 
-Bytes after the sample name's NUL terminator up to `0x123` contain small
-structural constants interleaved with what appear to be un-relocated memory
-addresses (heap pointers) left over from a C++ serialization. They carry no
+The final 12 bytes of the header (`0x118`–`0x123`) are two small constants (`4`
+and `0`) plus padding, left over from the object serialization. They carry no
 stable, interpretable meaning and are exposed verbatim as `ClxFile.raw_header`.
 
 ---
@@ -153,8 +161,9 @@ Observed values:
 | `Samp3` (916×733, binned) | `3` |
 | `Samp1` (687×550, binned) | `4` |
 
-Its semantics are not known; it may encode an acquisition mode, pixel storage
-variant, or camera configuration.
+The `type` field is the **binning factor**: the sensor is 2750×2200, and the
+capture is stored at `⌊2750/type⌋ × ⌊2200/type⌋`. `1` is full resolution,
+`2`/`3`/`4` are 2×2 / 3×3 / 4×4 binning.
 
 ### 4.2 Descriptor discovery
 
@@ -278,9 +287,12 @@ observed `type == 1` capture.
 
 The following are documented but not fully understood:
 
-- **`type` field** (1/2/3/4) — constant per capture; meaning unknown.
-- **Header `field_1` / `field_2`** (both `6`) — unknown.
-- **Opaque header/trailer regions** — contain un-relocated heap pointers.
+- **Descriptor `tag` field** (`0xC03E`/`0xC03D`/`0x403E` observed) — a 2-byte
+  field whose exact meaning (likely a capture/pixel-format flag) is unknown;
+  `0xC03E` is by far the most common value.
+- **Header `version` / trailing constants** (`6`, `4`, `0`) — unknown.
+- **Opaque trailer region** — contains serialized display settings interleaved
+  with un-relocated heap pointers.
 - **Descriptor `reserved`** field — always `0`.
 - **Trailer length** — 6456 bytes in every observed capture; may vary with settings.
 - **Compatibility** — the layout was derived from one device / software version;
